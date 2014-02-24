@@ -3,7 +3,7 @@ $(document).ready(function() {
 
     var source = Rx.Observable.create(function(observer) {
         // https://developer.mozilla.org/en-US/docs/Server-sent_events/Using_server-sent_events
-        var eventSource = new EventSource("/hello");
+        var eventSource = new EventSource("/update");
         eventSource.onmessage = function(event) {
             observer.onNext(event);
         };
