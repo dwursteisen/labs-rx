@@ -14,6 +14,7 @@ $(document).ready(function() {
 
     var template = doT.compile($("#message").html());
     source.map(function(event) {return event.data})
+          .map(function(data) { return JSON.parse(data); })
           .map(function(data) {return template(data)})
           .subscribe(function(html) {
             $("#timeline").append(html);
