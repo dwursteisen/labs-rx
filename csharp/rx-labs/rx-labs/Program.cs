@@ -15,33 +15,42 @@ namespace rx_labs
         static void Main(string[] args)
         {
 
-            var client = new RestClient("https://api.github.com");
+           
+            
+            var server = new WebSocketServer("ws://localhost:9001");
 
-            var reactive = new Subject<Tuple<IWebSocketConnection, string>>();
-            reactive.Subscribe(tuple => {
-                var connection = tuple.Item1;
-                var user = tuple.Item2;
+            var clients = new List<IWebSocketConnection>();
 
-                var request = new RestRequest("users/{user}", Method.GET);
-                request.AddUrlSegment("user", user);
 
-                var response = client.Execute(request);
-                connection.Send("Result -> "+response.Content);
+            var reactive = new Subject<string>();
+            reactive.Subscribe(message => {
+                clients.ForEach(co => co.Send("{\"id\":"+message+", \"status\": \"OK\"}"));
             });
 
-            var server = new WebSocketServer("ws://localhost:81");
-            
             server.Start(socket =>
             {
-                socket.OnOpen = () => Console.WriteLine("Open!");
-                socket.OnClose = () => Console.WriteLine("Close!");
-                socket.OnMessage = message => reactive.OnNext(new Tuple<IWebSocketConnection,string>(socket, message));
+                socket.OnOpen = () =>
+                {
+                    Console.WriteLine("Open!");
+                    clients.Add(socket);
+                };
+                socket.OnClose = () =>
+                {
+                    clients.Remove(socket);
+                    Console.WriteLine("Close!");
+                };
+                socket.OnMessage = message => Console.WriteLine("Received : " + message);
             });
 
             var command = string.Empty;
             while (command != "exit")
             {
                 command = Console.ReadLine();
+                if (command != "exit")
+                {
+                    reactive.OnNext(command);
+                }
+                
             }
             
         }
