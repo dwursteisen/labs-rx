@@ -14,45 +14,44 @@ namespace rx_labs
     {
         static void Main(string[] args)
         {
+            var serviceClient = new TrainServiceClient("ws://192.168.1.203:9001");
 
-           
-            
-            var server = new WebSocketServer("ws://localhost:9001");
+            //var trainStream = new Subject<Train> (); //Lire socket et recuperer les events sur le train
+            var incidentManager = new IncidentGeneratorRandom(serviceClient.TrainStream);
+            var stopIncidentManager = new StopIncidentGeneratorRandom(incidentManager.IncidentStream);
 
-            var clients = new List<IWebSocketConnection>();
+            //IncidentContributor server = new IncidentContributor(string.Empty);
+            //server.Start();
 
 
-            var reactive = new Subject<string>();
-            reactive.Subscribe(message => {
-                clients.ForEach(co => co.Send("{\"id\":"+message+", \"status\": \"OK\"}"));
-            });
+            incidentManager.IncidentStream.Subscribe(incident =>
+                {
+                    string msg = string.Format("{{ 'id':'{0}', 'status':'{1}' }}", incident.Id, incident.Message);
+                    //Console.WriteLine();
+                  
+                    //Push les events de train sur socket
+                   // server.Push(msg);
+                    serviceClient.PushMessage(msg);
+                });
 
-            server.Start(socket =>
+            stopIncidentManager.StopIncidentStream.Subscribe(stopIncident =>
             {
-                socket.OnOpen = () =>
-                {
-                    Console.WriteLine("Open!");
-                    clients.Add(socket);
-                };
-                socket.OnClose = () =>
-                {
-                    clients.Remove(socket);
-                    Console.WriteLine("Close!");
-                };
-                socket.OnMessage = message => Console.WriteLine("Received : " + message);
-            });
-
-            var command = string.Empty;
-            while (command != "exit")
-            {
-                command = Console.ReadLine();
-                if (command != "exit")
-                {
-                    reactive.OnNext(command);
-                }
+                string msg = DateTime.Now + " Incident :" + stopIncident.Id + " =========> Terminé";
+                //Console.WriteLine();
                 
-            }
-            
+                //Push les events de train sur socket
+                //server.Push(msg);
+            });
+
+            incidentManager.Start();
+            stopIncidentManager.Start();
+
+            //for (int i = 1; i < 20000; i++)
+            //    trainStream.OnNext(new Train { Id = i.ToString() });
+
+
+            //Console.WriteLine("Generer inc
+            Console.ReadLine();
         }
 
         
