@@ -3,6 +3,7 @@ package fr.soat.labs.rx;
 import fr.soat.labs.rx.handler.FromBackOfficeHandler;
 import fr.soat.labs.rx.handler.ToFrontOfficeHandler;
 import fr.soat.labs.rx.model.Entity;
+import fr.soat.labs.rx.model.Train;
 import org.webbitserver.WebServer;
 import org.webbitserver.WebServers;
 import org.webbitserver.handler.StaticFileHandler;
@@ -24,7 +25,7 @@ public class Server {
     private static final String LOG_TAG = "WebServer";
 
     public static void main(String[] args) throws Exception {
-        Subject<Entity, Entity> broker = PublishSubject.create();
+        Subject<Train, Train> broker = PublishSubject.create();
 
         File staticDirectory = new File(Server.class.getResource("/static").toURI());
 
@@ -42,7 +43,7 @@ public class Server {
         Logger.getLogger(LOG_TAG).info("Client listening at " + client.get().getUri());
     }
 
-    private enum ENV {
+    public enum ENV {
         LOCAL("ws://localhost:9001/"),
         REMOTE("ws://????????");
         private final String url;
@@ -51,7 +52,7 @@ public class Server {
             this.url = url;
         }
 
-        private String getUrl() {
+        public String getUrl() {
             return url;
         }
     }

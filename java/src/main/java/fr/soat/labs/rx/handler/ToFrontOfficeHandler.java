@@ -10,6 +10,7 @@ import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 import fr.soat.labs.rx.model.Entity;
+import fr.soat.labs.rx.model.Train;
 import org.webbitserver.EventSourceConnection;
 import org.webbitserver.EventSourceHandler;
 
@@ -30,11 +31,11 @@ public class ToFrontOfficeHandler implements EventSourceHandler {
 
     private static final String LOG_TAG = "Eventsource";
 
-    private final Observable<Entity> observable;
+    private final Observable<Train> observable;
 
     private final List<EventSourceConnection> connections = new LinkedList<>();
 
-    public ToFrontOfficeHandler(Observable<Entity> observable) {
+    public ToFrontOfficeHandler(Observable<Train> observable) {
         this.observable = observable;
 
         this.observable.map(e -> e.serialise())  // \n

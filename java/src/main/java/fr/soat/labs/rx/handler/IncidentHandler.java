@@ -1,30 +1,24 @@
 package fr.soat.labs.rx.handler;
 
 import fr.soat.labs.rx.model.Connection;
-import fr.soat.labs.rx.model.Entity;
+import fr.soat.labs.rx.model.Incident;
 import fr.soat.labs.rx.model.Train;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebSocketConnection;
 import rx.Observer;
-import rx.subjects.Subject;
 
 import java.util.logging.Logger;
 
 /**
- * Created with IntelliJ IDEA.
- * User: david.wursteisen
- * Date: 11/02/14
- * Time: 13:53
- * To change this template use File | Settings | File Templates.
+ * Created by formation on 28/02/14.
  */
-public class FromBackOfficeHandler extends BaseWebSocketHandler {
+public class IncidentHandler extends BaseWebSocketHandler {
 
     private static final String LOG_TAG = "websocket";
 
-    private final Observer<Train> listeners;
+    private final Observer<Incident> listeners;
 
-
-    public FromBackOfficeHandler(Observer<Train> listeners) {
+    public IncidentHandler(Observer<Incident> listeners) {
         this.listeners = listeners;
     }
 
@@ -36,6 +30,7 @@ public class FromBackOfficeHandler extends BaseWebSocketHandler {
     @Override
     public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
         Logger.getLogger(LOG_TAG).info("Receive Message : " + msg);
-        listeners.onNext(Train.deserialise(msg));
+        Incident incident = Incident.deserialise(msg);
+        listeners.onNext(incident);
     }
 }
