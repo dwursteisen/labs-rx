@@ -47,6 +47,8 @@ public class TrainGenerator {
         private final Collection<WebSocketConnection> connections = new LinkedList<>();
         private final Observable<Train> delayed;
 
+        private  Subject<Incident, Incident> broker = PublishSubject.create();
+
         private List<Train> liveTrains = new ArrayList<>();
 
         private Subject<Train, Train> subjets = PublishSubject.create();
@@ -58,22 +60,16 @@ public class TrainGenerator {
                 train.setDepartArrivee(DepartArrivee.DEPART);
                 subjets.onNext(train);
             };
-
             Schedulers.newThread().schedulePeriodically(sendDepartMessageToEveryOne, 0, 5, TimeUnit.SECONDS);
 
-            delayed = subjets.delay(3, TimeUnit.SECONDS).map((t) -> t.arrivee());
+            delayed = subjets.delay(5, TimeUnit.SECONDS).map((t) -> t.arrivee());
             subjets.subscribe((train) -> connections.forEach(c -> c.send(train.serialise())));
-
-            // gestion des incidents
-            // ecoute du flux des incidents, à la lecture d'un incident, on vire le train de la liste
-            Subject<Incident, Incident> broker = PublishSubject.create();
-            Future<WebSocketClient> client = new WebSocketClient(new URI("ws://192.168.1.202"), new IncidentHandler(broker)).start();
 
             Collection<String> incidents = new HashSet<>();
             broker.subscribe((in) -> incidents.add(in.getId()));
 
             delayed.doOnNext(t ->System.out.println("DO : "+incidents))
-                    .filter(t -> !incidents.contains(t.getId()))
+                    .filter(t -> !incidents.remove(t.getId()))
                     .subscribe((train) -> connections.forEach(c -> c.send(train.serialise())));
         }
 
@@ -98,6 +94,13 @@ public class TrainGenerator {
         public void onClose(WebSocketConnection connection) throws Exception {
             connections.remove(connection);
             Logger.getLogger(LOG_TAG).info("Connection removed : " + connection);
+        }
+
+        @Override
+        public void onMessage(WebSocketConnection connection, String msg) throws Throwable {
+            Logger.getLogger(LOG_TAG).info("JSON des M$iens : " + msg);
+            Incident incident = Incident.deserialise(msg);
+            broker.onNext(incident);
         }
     }
 }
