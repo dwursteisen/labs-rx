@@ -1,6 +1,6 @@
 package fr.soat.labs.rx.mock;
 
-import fr.soat.labs.rx.model.Entity;
+import fr.soat.labs.rx.model.Train;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebServer;
 import org.webbitserver.WebServers;
@@ -11,7 +11,6 @@ import rx.util.functions.Action0;
 
 import java.util.Collection;
 import java.util.LinkedList;
-import java.util.Random;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
@@ -38,19 +37,24 @@ public class CSharpStub {
     private static class CSharpStubHandler extends BaseWebSocketHandler {
 
         private final Collection<WebSocketConnection> connections = new LinkedList<>();
-        private final Random generator = new Random();
 
         private CSharpStubHandler() {
-            Action0 sendMessageToEveryOne = new Action0() {
-                @Override
-                public void call() {
-                    Observable.from(connections).subscribe(ws -> {
-                        Entity entity = new Entity("" + generator.nextInt(100), Entity.Status.OK);
-                        ws.send(entity.serialise());
-                    });
-                }
+            Action0 sendMessageToEveryOne = () -> {
+                Observable.from(connections).subscribe(ws -> {
+                    Train train = new Train();
+                    train.setId(generateId());
+                    ws.send(train.serialise());
+                });
             };
             Schedulers.newThread().schedulePeriodically(sendMessageToEveryOne, 0, 1, TimeUnit.SECONDS);
+        }
+
+        private static int nbGeneratedTrain = 0;
+        private String generateId() {
+            synchronized (this){
+                nbGeneratedTrain++;
+                return "" + nbGeneratedTrain;
+            }
         }
 
         @Override
