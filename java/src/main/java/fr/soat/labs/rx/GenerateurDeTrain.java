@@ -3,6 +3,7 @@ package fr.soat.labs.rx;
 import fr.soat.labs.rx.handler.GenerateurDeTrainWebSocketHandler;
 import org.webbitserver.WebServer;
 import org.webbitserver.WebServers;
+import rx.Observable;
 
 import java.util.concurrent.Future;
 import java.util.logging.Logger;
@@ -20,9 +21,7 @@ public class GenerateurDeTrain {
                 .add("/trains/?", new GenerateurDeTrainWebSocketHandler()) // \n
                 .start();
 
-        Logger.getLogger(LOG_TAG).info("Running générateur de train at " + ws.get().getUri());
-
-
+        Observable.from(ws).subscribe(server -> Logger.getLogger(LOG_TAG).info("Running générateur de train at " + server.getUri()));
     }
 
 }
