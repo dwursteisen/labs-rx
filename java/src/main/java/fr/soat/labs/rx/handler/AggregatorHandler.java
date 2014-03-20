@@ -6,8 +6,10 @@ import org.webbitserver.*;
 import org.webbitserver.netty.WebSocketClient;
 import rx.Observable;
 import rx.Observer;
+import rx.Subscription;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
+import rx.subscriptions.Subscriptions;
 import rx.util.functions.Func1;
 
 import java.net.URI;
@@ -22,27 +24,40 @@ import java.util.logging.Logger;
 public class AggregatorHandler implements EventSourceHandler {
 
 
-    private Collection<EventSourceConnection> connections = new LinkedList<>();
+    private final Collection<EventSourceConnection> connections = new LinkedList<>();
 
     public AggregatorHandler() throws URISyntaxException {
-        final Subject<Train, Train> trainBroker = PublishSubject.create();
-        new WebSocketClient(new URI("ws://localhost:9000/trains"), new MessageHandler<>(trainBroker, (str) -> new Train().deserialise(str))).start();
+        Observable<Train> trainBroker = buildWebsocketObservable("ws://localhost:9000/trains")
+                                                                .map(new Train()::deserialise);
+
+        Observable<Incident> incidentBroker = buildWebsocketObservable("ws://localhost:9001/incidents")
+                                                                .map(new Incident()::deserialise);
 
 
-        final Subject<Incident, Incident> incidentBroker = PublishSubject.create();
-        new WebSocketClient(new URI("ws://localhost:9001/incidents"), new MessageHandler<>(incidentBroker, (str) -> new Incident().deserialise(str))).start();
+        Observable<String> fluxDeTrainEnJson = trainBroker.map(Train::serialise);
+        Observable<String> fluxIncidentsEnJson = incidentBroker.map(Incident::serialize);
 
-
-        Observable<String> fluxDeTrainEnJson = trainBroker.map((t) -> t.serialise());
-        Observable<String> fluxIncidentsEnJson = incidentBroker.map((i) -> i.serialize());
         Observable.merge(fluxDeTrainEnJson, fluxIncidentsEnJson)
                 .doOnNext((json) -> Logger.getLogger("Aggregator").info("json to send : " + json))
-                .map((json) -> new EventSourceMessage(json))
-                .subscribe((msg) -> {
-                    connections.forEach((c) -> c.send(msg));
-                });
+                .map(EventSourceMessage::new)
+                .subscribe((msg) -> connections.forEach((c) -> c.send(msg)),
+                            (ex) ->  Logger.getLogger("Aggregator").warning(ex.getMessage())
+                );
     }
 
+    private Observable<String> buildWebsocketObservable(String url) {
+        return Observable.create(new Observable.OnSubscribeFunc<String>() {
+            @Override
+            public Subscription onSubscribe(Observer<? super String> observer) {
+                try {
+                    new WebSocketClient(new URI(url), new MessageHandler(observer)).start();
+                } catch (URISyntaxException e) {
+                    observer.onError(e);
+                }
+                return Subscriptions.empty();
+            }
+        }).cache();
+    }
 
     @Override
     public void onOpen(EventSourceConnection eventSourceConnection) throws Exception {
@@ -54,19 +69,17 @@ public class AggregatorHandler implements EventSourceHandler {
         connections.remove(eventSourceConnection);
     }
 
-    private static class MessageHandler<TYPE> extends BaseWebSocketHandler {
+    private static class MessageHandler extends BaseWebSocketHandler {
 
-        private final Observer<TYPE> broker;
-        private final Func1<String, TYPE> builder;
+        private final Observer<? super String> broker;
 
-        private MessageHandler(Observer<TYPE> broker, Func1<String, TYPE> builder) {
-            this.broker = broker;
-            this.builder = builder;
+        private MessageHandler(Observer<? super String> observer) {
+            this.broker = observer;
         }
 
         @Override
         public void onMessage(WebSocketConnection connection, String msg) throws Throwable {
-            this.broker.onNext(builder.call(msg));
+            this.broker.onNext(msg);
         }
     }
 }

@@ -12,7 +12,7 @@
     <link href="bootstrap/dashboard.css" rel="stylesheet"/>
     <script src="bootstrap/bootstrap.min.js" type="text/javascript"></script>
     <script src="bootstrap/docs.min.js" type="text/javascript"></script>
-    <script src="javascript/main.js" type="text/javascript"></script>
+    <script src="javascript/aggregator.js" type="text/javascript"></script>
     <title>Dashboard Template for Bootstrap</title>
 
 </head>
@@ -67,36 +67,7 @@
             </ul>
         </div>
         <div class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
-            <h1 class="page-header">Dashboard</h1>
-
-            <div class="row placeholders">
-                <div class="col-xs-6 col-sm-3 placeholder">
-                    <img data-src="holder.js/200x200/auto/sky" class="img-responsive"
-                         alt="Generic placeholder thumbnail">
-                    <h4>Label</h4>
-                    <span class="text-muted">Something else</span>
-                </div>
-                <div class="col-xs-6 col-sm-3 placeholder">
-                    <img data-src="holder.js/200x200/auto/vine" class="img-responsive"
-                         alt="Generic placeholder thumbnail">
-                    <h4>Label</h4>
-                    <span class="text-muted">Something else</span>
-                </div>
-                <div class="col-xs-6 col-sm-3 placeholder">
-                    <img data-src="holder.js/200x200/auto/sky" class="img-responsive"
-                         alt="Generic placeholder thumbnail">
-                    <h4>Label</h4>
-                    <span class="text-muted">Something else</span>
-                </div>
-                <div class="col-xs-6 col-sm-3 placeholder">
-                    <img data-src="holder.js/200x200/auto/vine" class="img-responsive"
-                         alt="Generic placeholder thumbnail">
-                    <h4>Label</h4>
-                    <span class="text-muted">Something else</span>
-                </div>
-            </div>
-
-            <h2 class="sub-header">Section title</h2>
+            <h1 class="page-header">Aggregateur</h1>
 
             <div class="table-responsive">
                 <table class="table table-striped">
@@ -104,20 +75,21 @@
                     <tr>
                         <th>#</th>
                         <th>Status</th>
-                        <th>??</th>
-                        <th>??</th>
-                        <th>??</th>
+                        <th>Message</th>
+                        <th>Heure</th>
+                        <th>TBD</th>
                     </tr>
                     </thead>
                     <tbody id="timeline">
                     <script type="doT/template" id="message">
-                    <tr>
-                        <td>{{=it.id}}</td>
-                        <td>{{=it.status}}</td>
-                        <td>_</td>
-                        <td>_</td>
-                        <td>_</td>
-                    </tr>
+
+                        <tr id="row_{{=it.id}}" class="{{? it.type.toLowerCase() === 'incident'}}danger{{?}}">
+                            <td>{{=it.id}}</td>
+                            <td>{{=it.type}}</td>
+                            <td>{{=it.message}}</td>
+                            <td>{{=it.hour}}</td>
+                            <td>_</td>
+                        </tr>
 
                     </script>
 
