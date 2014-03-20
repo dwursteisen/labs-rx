@@ -17,9 +17,10 @@ public class Incident {
 
     public String hour = LocalDateTime.now().format(DateTimeFormatter.ISO_TIME);
 
-    public Incident(String id, String status) {
+    public Incident(String id, String message, Train train) {
         this.id = id;
-        this.status = status;
+        this.train = train;
+        this.message = message;
     }
 
     public Incident() {
