@@ -16,7 +16,7 @@ public class Aggregator {
 
     public static void main(String[] args) throws URISyntaxException {
 
-        File staticDirectory = new File(Server.class.getResource("/static").toURI());
+        File staticDirectory = new File(Aggregator.class.getResource("/static").toURI());
 
         Future<? extends WebServer> ws = WebServers.createWebServer(9002) // \n
                 .add(new StaticFileHandler(staticDirectory))

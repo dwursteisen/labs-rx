@@ -3,7 +3,7 @@ package fr.soat.labs.rx.handler;
 import fr.soat.labs.rx.model.Train;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebSocketConnection;
-import rx.schedulers.Schedulers;
+import rx.Observable;
 
 import java.security.SecureRandom;
 import java.util.Collection;
@@ -24,23 +24,28 @@ public class GenerateurDeTrainWebSocketHandler extends BaseWebSocketHandler {
     private final SecureRandom random = new SecureRandom();
 
     public GenerateurDeTrainWebSocketHandler() {
-        Schedulers.computation().schedulePeriodically(() -> {
-            String id = "TRAIN_ID" + random.nextInt(5);
-            Train train = new Train(id);
-            connections.forEach((c) -> c.send(train.serialise()));
-        }, 0, 5, TimeUnit.SECONDS);
+        Observable.interval(5, TimeUnit.SECONDS)
+                .map((l) -> "TRAIN_ID" + random.nextInt(5))
+                .map(Train::new)
+                .map(Train::serialise)
+                .doOnEach((json) -> log("Json généré : "+json))
+                .subscribe((json) -> connections.forEach(c -> c.send(json)));
     }
 
     @Override
     public void onOpen(WebSocketConnection connection) throws Exception {
         connections.add(connection);
-        Logger.getLogger(LOG_TAG).info("Nouvelle connexion ajouté !");
+        log("Nouvelle connexion ajouté !");
 
+    }
+
+    private void log(String msg) {
+        Logger.getLogger(LOG_TAG).info(msg);
     }
 
     @Override
     public void onClose(WebSocketConnection connection) throws Exception {
         connections.remove(connection);
-        Logger.getLogger(LOG_TAG).info("Connexion fermé");
+        log("Connexion fermé");
     }
 }

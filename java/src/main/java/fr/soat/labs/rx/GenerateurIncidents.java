@@ -19,7 +19,7 @@ public class GenerateurIncidents {
 
     public static void main(String[] args) throws Exception {
 
-        File staticDirectory = new File(Server.class.getResource("/static").toURI());
+        File staticDirectory = new File(GenerateurIncidents.class.getResource("/static").toURI());
 
 
         Future<? extends WebServer> ws = WebServers.createWebServer(9001) // \n
