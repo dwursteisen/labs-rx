@@ -3,7 +3,6 @@ package fr.soat.labs.rx.handler;
 import fr.soat.labs.rx.model.Train;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebSocketConnection;
-import rx.Observable;
 import rx.schedulers.Schedulers;
 
 import java.security.SecureRandom;

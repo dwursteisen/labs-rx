@@ -2,7 +2,6 @@ package fr.soat.labs.rx.handler;
 
 import fr.soat.labs.rx.model.Connection;
 import fr.soat.labs.rx.model.Incident;
-import fr.soat.labs.rx.model.Train;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebSocketConnection;
 import rx.Observer;
@@ -30,7 +29,7 @@ public class IncidentHandler extends BaseWebSocketHandler {
     @Override
     public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
         Logger.getLogger(LOG_TAG).info("Receive Message : " + msg);
-        Incident incident = Incident.deserialise(msg);
+        Incident incident = new Incident().deserialise(msg);
         listeners.onNext(incident);
     }
 }

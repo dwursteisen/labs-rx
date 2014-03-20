@@ -1,7 +1,6 @@
 package fr.soat.labs.rx;
 
 import fr.soat.labs.rx.handler.GenerateurDeTrainWebSocketHandler;
-import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebServer;
 import org.webbitserver.WebServers;
 

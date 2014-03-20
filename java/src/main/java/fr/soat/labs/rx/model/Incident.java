@@ -24,7 +24,7 @@ public class Incident {
 
     public Incident() {
     }
-    
+
     public Incident deserialise(String str) {
         return new Gson().fromJson(str, Incident.class);
     }

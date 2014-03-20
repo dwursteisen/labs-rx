@@ -1,12 +1,10 @@
 package fr.soat.labs.rx.handler;
 
 import fr.soat.labs.rx.model.Connection;
-import fr.soat.labs.rx.model.Entity;
 import fr.soat.labs.rx.model.Train;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebSocketConnection;
 import rx.Observer;
-import rx.subjects.Subject;
 
 import java.util.logging.Logger;
 

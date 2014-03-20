@@ -12,7 +12,7 @@ public class Train {
     public String type = "TRAIN";
 
     public DepartArrivee departArrivee;
-    
+
     public Train() {
     }
 

@@ -30,6 +30,5 @@ public class GenerateurIncidents {
         Logger.getLogger(LOG_TAG).info("Running générateur de train at " + ws.get().getUri());
 
 
-
     }
 }

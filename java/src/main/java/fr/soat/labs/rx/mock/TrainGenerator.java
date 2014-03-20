@@ -1,7 +1,5 @@
 package fr.soat.labs.rx.mock;
 
-import fr.soat.labs.rx.Server;
-import fr.soat.labs.rx.handler.IncidentHandler;
 import fr.soat.labs.rx.model.DepartArrivee;
 import fr.soat.labs.rx.model.Incident;
 import fr.soat.labs.rx.model.Train;
@@ -9,18 +7,15 @@ import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebServer;
 import org.webbitserver.WebServers;
 import org.webbitserver.WebSocketConnection;
-import org.webbitserver.netty.WebSocketClient;
 import rx.Observable;
 import rx.schedulers.Schedulers;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
 import rx.util.functions.Action0;
-import rx.util.functions.Func1;
-import rx.util.functions.Func2;
 
-import java.net.URI;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -44,20 +39,18 @@ public class TrainGenerator {
 
     private static class TrainGeneratorHandler extends BaseWebSocketHandler {
 
+        private static int nbGeneratedTrain = 0;
         private final Collection<WebSocketConnection> connections = new LinkedList<>();
         private final Observable<Train> delayed;
-
-        private  Subject<Incident, Incident> broker = PublishSubject.create();
-
+        private Subject<Incident, Incident> broker = PublishSubject.create();
         private List<Train> liveTrains = new ArrayList<>();
-
         private Subject<Train, Train> subjets = PublishSubject.create();
 
         private TrainGeneratorHandler() throws Exception {
             Action0 sendDepartMessageToEveryOne = () -> {
                 Train train = new Train();
-                train.setId(generateId());
-                train.setDepartArrivee(DepartArrivee.DEPART);
+                train.id = generateId();
+                train.departArrivee = DepartArrivee.DEPART;
                 subjets.onNext(train);
             };
             Schedulers.newThread().schedulePeriodically(sendDepartMessageToEveryOne, 0, 5, TimeUnit.SECONDS);
@@ -66,14 +59,12 @@ public class TrainGenerator {
             subjets.subscribe((train) -> connections.forEach(c -> c.send(train.serialise())));
 
             Collection<String> incidents = new HashSet<>();
-            broker.subscribe((in) -> incidents.add(in.getId()));
+            broker.subscribe((in) -> incidents.add(in.id));
 
-            delayed.doOnNext(t ->System.out.println("DO : "+incidents))
-                    .filter(t -> !incidents.remove(t.getId()))
+            delayed.doOnNext(t -> System.out.println("DO : " + incidents))
+                    .filter(t -> !incidents.remove(t.id))
                     .subscribe((train) -> connections.forEach(c -> c.send(train.serialise())));
         }
-
-        private static int nbGeneratedTrain = 0;
 
         private String generateId() {
             synchronized (this) {
@@ -99,7 +90,7 @@ public class TrainGenerator {
         @Override
         public void onMessage(WebSocketConnection connection, String msg) throws Throwable {
             Logger.getLogger(LOG_TAG).info("JSON des M$iens : " + msg);
-            Incident incident = Incident.deserialise(msg);
+            Incident incident = new Incident().deserialise(msg);
             broker.onNext(incident);
         }
     }

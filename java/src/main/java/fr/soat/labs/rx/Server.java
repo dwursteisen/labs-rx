@@ -1,17 +1,11 @@
 package fr.soat.labs.rx;
 
 import fr.soat.labs.rx.handler.FromBackOfficeHandler;
-import fr.soat.labs.rx.handler.ToFrontOfficeHandler;
-import fr.soat.labs.rx.model.Entity;
 import fr.soat.labs.rx.model.Train;
-import org.webbitserver.WebServer;
-import org.webbitserver.WebServers;
-import org.webbitserver.handler.StaticFileHandler;
 import org.webbitserver.netty.WebSocketClient;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
 
-import java.io.File;
 import java.net.URI;
 import java.util.concurrent.Future;
 import java.util.logging.Logger;
@@ -34,7 +28,7 @@ public class Server {
 //                .add("/update", new ToFrontOfficeHandler(broker)) // \n
 //                .start();
 
-       // Logger.getLogger(LOG_TAG).info("Running server at " + ws.get().getUri());
+        // Logger.getLogger(LOG_TAG).info("Running server at " + ws.get().getUri());
 
 
         Future<WebSocketClient> client = new WebSocketClient(new URI(ENV.LOCAL.getUrl()), new FromBackOfficeHandler(broker))

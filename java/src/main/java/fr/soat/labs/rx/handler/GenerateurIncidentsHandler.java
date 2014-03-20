@@ -42,7 +42,7 @@ public class GenerateurIncidentsHandler extends BaseWebSocketHandler {
         }).delay(5, TimeUnit.SECONDS)
                 .filter((i) -> i.id.contains("1") || i.id.contains("2"))
                 .map(i -> i.serialize())
-                .doOnNext((json) -> Logger.getLogger("Aggregator").info("incident json to send : "+json))
+                .doOnNext((json) -> Logger.getLogger("Aggregator").info("incident json to send : " + json))
                 .subscribe((json) -> connections.forEach(c -> c.send(json)));
     }
 

@@ -42,7 +42,7 @@ public class CSharpStub {
             Action0 sendMessageToEveryOne = () -> {
                 Observable.from(connections).subscribe(ws -> {
                     Train train = new Train();
-                    train.setId(generateId());
+                    train.id = generateId();
                     ws.send(train.serialise());
                 });
             };
@@ -50,8 +50,9 @@ public class CSharpStub {
         }
 
         private static int nbGeneratedTrain = 0;
+
         private String generateId() {
-            synchronized (this){
+            synchronized (this) {
                 nbGeneratedTrain++;
                 return "" + nbGeneratedTrain;
             }

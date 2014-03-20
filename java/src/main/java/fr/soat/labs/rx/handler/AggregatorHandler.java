@@ -4,12 +4,10 @@ import fr.soat.labs.rx.model.Incident;
 import fr.soat.labs.rx.model.Train;
 import org.webbitserver.*;
 import org.webbitserver.netty.WebSocketClient;
-import rx.Notification;
 import rx.Observable;
 import rx.Observer;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
-import rx.util.functions.Action1;
 import rx.util.functions.Func1;
 
 import java.net.URI;
@@ -38,11 +36,11 @@ public class AggregatorHandler implements EventSourceHandler {
         Observable<String> fluxDeTrainEnJson = trainBroker.map((t) -> t.serialise());
         Observable<String> fluxIncidentsEnJson = incidentBroker.map((i) -> i.serialize());
         Observable.merge(fluxDeTrainEnJson, fluxIncidentsEnJson)
-                .doOnNext((json) -> Logger.getLogger("Aggregator").info("json to send : "+json) )
+                .doOnNext((json) -> Logger.getLogger("Aggregator").info("json to send : " + json))
                 .map((json) -> new EventSourceMessage(json))
-                  .subscribe((msg) -> {
-                      connections.forEach((c) -> c.send(msg));
-                  });
+                .subscribe((msg) -> {
+                    connections.forEach((c) -> c.send(msg));
+                });
     }
 
 
