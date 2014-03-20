@@ -27,14 +27,14 @@ public class Server {
     public static void main(String[] args) throws Exception {
         Subject<Train, Train> broker = PublishSubject.create();
 
-        File staticDirectory = new File(Server.class.getResource("/static").toURI());
+//        File staticDirectory = new File(Server.class.getResource("/static").toURI());
+//
+//        Future<? extends WebServer> ws = WebServers.createWebServer(9000) // \n
+//                .add(new StaticFileHandler(staticDirectory)) // \n
+//                .add("/update", new ToFrontOfficeHandler(broker)) // \n
+//                .start();
 
-        Future<? extends WebServer> ws = WebServers.createWebServer(9000) // \n
-                .add(new StaticFileHandler(staticDirectory)) // \n
-                .add("/update", new ToFrontOfficeHandler(broker)) // \n
-                .start();
-
-        Logger.getLogger(LOG_TAG).info("Running server at " + ws.get().getUri());
+       // Logger.getLogger(LOG_TAG).info("Running server at " + ws.get().getUri());
 
 
         Future<WebSocketClient> client = new WebSocketClient(new URI(ENV.LOCAL.getUrl()), new FromBackOfficeHandler(broker))
@@ -43,8 +43,8 @@ public class Server {
         Logger.getLogger(LOG_TAG).info("Client listening at " + client.get().getUri());
     }
 
-    public enum ENV {
-        LOCAL("ws://localhost:9001/"),
+    private enum ENV {
+        LOCAL("ws://localhost:9000/trains"),
         REMOTE("ws://????????");
         private final String url;
 
@@ -52,7 +52,7 @@ public class Server {
             this.url = url;
         }
 
-        public String getUrl() {
+        private String getUrl() {
             return url;
         }
     }

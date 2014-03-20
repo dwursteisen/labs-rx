@@ -7,40 +7,31 @@ import com.google.gson.Gson;
  */
 public class Train {
 
-    private String id;
+    public String id;
 
-    private DepartArrivee departArrivee;
+    public String type = "TRAIN";
 
-    public String getId() {
-        return id;
-    }
-
+    public DepartArrivee departArrivee;
+    
     public Train() {
     }
 
-    public void setId(String id) {
+    public Train(String id) {
         this.id = id;
-    }
-
-    public DepartArrivee getDepartArrivee() {
-        return departArrivee;
-    }
-
-    public void setDepartArrivee(DepartArrivee departArrivee) {
-        this.departArrivee = departArrivee;
     }
 
     public String serialise() {
         return new Gson().toJson(this);
     }
 
-    public static Train deserialise(String json) {
+    public Train deserialise(String json) {
         return new Gson().fromJson(json, Train.class);
     }
 
+
     public Train arrivee() {
         Train t = deserialise(serialise());
-        t.setDepartArrivee(DepartArrivee.ARRIVEE);
+        t.departArrivee = DepartArrivee.ARRIVEE;
         return t;
     }
 

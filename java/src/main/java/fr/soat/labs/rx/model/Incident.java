@@ -2,12 +2,20 @@ package fr.soat.labs.rx.model;
 
 import com.google.gson.Gson;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 /**
  * Created by formation on 28/02/14.
  */
 public class Incident {
-    private String id;
-    private String status;
+    public String id;
+    public Train train;
+    public String message;
+    public String status;
+    public String type = "INCIDENT";
+
+    public String hour = LocalDateTime.now().format(DateTimeFormatter.ISO_TIME);
 
     public Incident(String id, String status) {
         this.id = id;
@@ -16,28 +24,12 @@ public class Incident {
 
     public Incident() {
     }
-
-    public String getId() {
-        return id;
+    
+    public Incident deserialise(String str) {
+        return new Gson().fromJson(str, Incident.class);
     }
 
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String serialise() {
+    public String serialize() {
         return new Gson().toJson(this);
-    }
-
-    public static Incident deserialise(String json) {
-        return new Gson().fromJson(json, Incident.class);
     }
 }

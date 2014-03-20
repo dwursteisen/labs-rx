@@ -36,6 +36,6 @@ public class FromBackOfficeHandler extends BaseWebSocketHandler {
     @Override
     public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
         Logger.getLogger(LOG_TAG).info("Receive Message : " + msg);
-        listeners.onNext(Train.deserialise(msg));
+        listeners.onNext(new Train().deserialise(msg));
     }
 }
