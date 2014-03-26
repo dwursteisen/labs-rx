@@ -1,16 +1,23 @@
 package fr.soat.labs.rx;
 
-import com.github.ryenus.rop.OptionParser;
-import org.webbitserver.*;
-import rx.Observable;
-import rx.Observer;
-import rx.subjects.PublishSubject;
-import rx.subjects.Subject;
-
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+
+import com.github.ryenus.rop.OptionParser;
+import fr.soat.labs.rx.operator.OperatorRetryWithDelay;
+import org.webbitserver.HttpControl;
+import org.webbitserver.HttpHandler;
+import org.webbitserver.HttpRequest;
+import org.webbitserver.HttpResponse;
+import org.webbitserver.WebServer;
+import org.webbitserver.WebServers;
+import rx.Observable;
+import rx.Observer;
+import rx.subjects.PublishSubject;
+import rx.subjects.Subject;
 
 /**
  * Created with IntelliJ IDEA.
@@ -23,6 +30,7 @@ import java.util.logging.Logger;
 public class InstancesSpawner {
 
     private final Logger killerLog = Logger.getLogger("killer");
+    private final Logger log = Logger.getLogger("log");
     @OptionParser.Option(opt = {"-i", "--instances"}, description = "number of instances to spawn")
     private int numberOfInstances = 5;
     @OptionParser.Option(opt = {"-p", "--minPort"}, description = "First port to use")
@@ -43,8 +51,9 @@ public class InstancesSpawner {
 
         Observable<Integer> startintPort = Observable.range(minPort, numberOfInstances);
 
-        Observable<WebServer> ws = Observable.merge(newPortToSpawn.delay(5, TimeUnit.SECONDS), startintPort)
-                .flatMap((port) -> Observable.from(WebServers.createWebServer(port).start())).cache().retry();
+        Observable<WebServer> ws = Observable.merge(newPortToSpawn.delay(1, TimeUnit.SECONDS).retry(), startintPort)
+                .flatMap((expectedPort) -> Observable.merge(Observable.from(expectedPort), Observable.from(webServers.keySet())).max(Comparator.naturalOrder()).map((p) -> p+1))
+                .flatMap((port) -> from(WebServers.createWebServer(port))).cache();
 
         ws.subscribe(new WSObserver());
 
@@ -59,14 +68,13 @@ public class InstancesSpawner {
 
         Subject<Integer, Integer> killed = PublishSubject.create();
 
-        killed.doOnEach((port) -> {
-            killerLog.warning("Will try to kill " + port);
-        })
+        killed.doOnNext((port) -> killerLog.warning("Will try to kill " + port))
                 .map(webServers::get)
                 .filter((server) -> server != null)
                 .flatMap((server) -> Observable.from(server.stop()))
                 .subscribe(((killedServer) -> {
                     killerLog.warning("Just killed " + killedServer.getPort());
+                    webServers.remove(killedServer.getPort());
                     newPortToSpawn.onNext(killedServer.getPort());
                 }));
 
@@ -75,6 +83,13 @@ public class InstancesSpawner {
                 .add("/kill/?", new KillerHandler(killed))
                 .start())
                 .subscribe((server) -> killerLog.info("Ready to kill at " + server.getUri()));
+    }
+
+    public Observable<WebServer> from(WebServer webserver) {
+        log.info("Will try to spawn " + webserver.getPort());
+        return Observable.from(webserver.start())
+                .doOnError(Throwable::printStackTrace)
+                .nest().lift(new OperatorRetryWithDelay<>(5, 5, TimeUnit.SECONDS));
     }
 
     private static class KillerHandler implements HttpHandler {
