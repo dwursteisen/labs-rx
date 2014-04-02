@@ -1,12 +1,23 @@
 package fr.soat.labs.rx;
 
-import com.github.ryenus.rop.OptionParser;
-import org.webbitserver.*;
-import rx.Observable;
-import rx.Observer;
-
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
+
+import com.github.ryenus.rop.OptionParser;
+import fr.soat.labs.rx.services.ComputeService;
+import org.webbitserver.EventSourceConnection;
+import org.webbitserver.EventSourceHandler;
+import org.webbitserver.EventSourceMessage;
+import org.webbitserver.HttpControl;
+import org.webbitserver.HttpHandler;
+import org.webbitserver.HttpRequest;
+import org.webbitserver.HttpResponse;
+import org.webbitserver.WebServer;
+import org.webbitserver.WebServers;
+import rx.Observable;
+import rx.Observer;
+import rx.subjects.PublishSubject;
+import rx.subjects.Subject;
 
 /**
  * Created with IntelliJ IDEA.
@@ -33,11 +44,18 @@ public class InstancesSpawner {
 
         Observable<Integer> startintPort = Observable.range(minPort, numberOfInstances);
 
-        Observable<String> responseObserver = Observable.interval(5, TimeUnit.SECONDS).map((i) -> "MSG " + i);
+        final ComputeService computer = new ComputeService();
+
+        Subject<Operation, Operation> operations = PublishSubject.create();
+
+        Observable<String> computeResponseAsStr = operations
+                .flatMap((op) -> computer.compute(op.operande, op.op1, op.op2))
+                .map(ComputeService.Result::getResult);
 
         Observable<WebServer> ws = startintPort
                 .flatMap((port) -> Observable.from(WebServers.createWebServer(port)
-                        .add("/update/?", new EventSourceOperation(responseObserver))
+                        .add("/compute/?", new ComputeOperation(operations))
+                        .add("/update/?", new EventSourceOperation(computeResponseAsStr))
                         .start()))
                 .cache();
 
@@ -46,10 +64,21 @@ public class InstancesSpawner {
 
     }
 
+    static class Operation {
+        private final String operande;
+        private final String op1;
+        private final String op2;
+
+        Operation(final String operande, final String op1, final String op2) {
+            this.operande = operande;
+            this.op1 = op1;
+            this.op2 = op2;
+        }
+    }
+
     private static class EventSourceOperation implements EventSourceHandler {
 
         private final Observable<String> observer;
-
         private Observable<EventSourceConnection> connections = Observable.empty();
 
         private EventSourceOperation(Observable<String> observer) {
@@ -101,6 +130,23 @@ public class InstancesSpawner {
         @Override
         public void onNext(WebServer o) {
             log.info("WS started : " + o.getUri());
+        }
+    }
+
+    private static class ComputeOperation implements HttpHandler {
+        private final Subject<Operation, Operation> operations;
+
+        public ComputeOperation(final Subject<Operation, Operation> operations) {
+            this.operations = operations;
+        }
+
+        @Override
+        public void handleHttpRequest(final HttpRequest request, final HttpResponse response, final HttpControl control) throws Exception {
+            String operande = request.queryParam("operande");
+            String op1 = request.queryParam("op1");
+            String op2 = request.queryParam("op2");
+            operations.onNext(new Operation(operande, op1, op2));
+            response.content("OK").end();
         }
     }
 }
