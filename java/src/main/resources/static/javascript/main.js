@@ -23,6 +23,6 @@ $(document).ready(function () {
     portsUpdate.map(function (data) {
         return template(data)
     }).subscribe(function (html) {
-         $("#port").html(html);
-    });
+            $("#port").html(html);
+        });
 });
