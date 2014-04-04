@@ -1,23 +1,21 @@
 package fr.soat.labs.rx;
 
+import java.io.File;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import com.github.ryenus.rop.OptionParser;
-import fr.soat.labs.rx.services.ComputeService;
-import org.webbitserver.EventSourceConnection;
-import org.webbitserver.EventSourceHandler;
-import org.webbitserver.EventSourceMessage;
-import org.webbitserver.HttpControl;
-import org.webbitserver.HttpHandler;
-import org.webbitserver.HttpRequest;
-import org.webbitserver.HttpResponse;
+import com.google.gson.Gson;
+import fr.soat.labs.rx.handler.EventSourceOperation;
+import fr.soat.labs.rx.handler.WebSocketOperation;
 import org.webbitserver.WebServer;
 import org.webbitserver.WebServers;
+import org.webbitserver.handler.StaticFileHandler;
 import rx.Observable;
 import rx.Observer;
-import rx.subjects.PublishSubject;
-import rx.subjects.Subject;
 
 /**
  * Created with IntelliJ IDEA.
@@ -33,82 +31,46 @@ public class InstancesSpawner {
     private int numberOfInstances = 5;
     @OptionParser.Option(opt = {"-p", "--minPort"}, description = "First port to use")
     private int minPort = 4567;
+    @OptionParser.Option(opt = {"-m", "--masterPort"}, description = "Master port")
+    private int masterPort = 4444;
 
     public static void main(String[] args) {
         OptionParser parser = new OptionParser(InstancesSpawner.class);
         parser.parse(args);
     }
 
-    public void run(OptionParser parser, String[] params) { // either or both args can be omitted
+    public void run(OptionParser parser, String[] params) throws Exception { // either or both args can be omitted
 
 
         Observable<Integer> startintPort = Observable.range(minPort, numberOfInstances);
 
-        final ComputeService computer = new ComputeService();
 
-        Subject<Operation, Operation> operations = PublishSubject.create();
+        Observable<WebServer> pricers = startintPort
+                .flatMap((port) -> {
 
-        Observable<String> computeResponseAsStr = operations
-                .flatMap((op) -> computer.compute(op.operande, op.op1, op.op2))
-                .map(ComputeService.Result::getResult);
+                    Observable<String> randomizer = Observable.interval(1, TimeUnit.NANOSECONDS).filter((i) -> new Random().nextInt(10) < 9)
+                            .map((i) -> new Random().nextInt(1000)).map(String::valueOf).map((str) -> String.format("{\"price\": \"%s\"}", str));
 
-        Observable<WebServer> ws = startintPort
-                .flatMap((port) -> Observable.from(WebServers.createWebServer(port)
-                        .add("/compute/?", new ComputeOperation(operations))
-                        .add("/update/?", new EventSourceOperation(computeResponseAsStr))
-                        .start()))
+                    return Observable.from(WebServers.createWebServer(port)
+                            .add("/update/?", new WebSocketOperation(randomizer))
+                            .start());
+                })
                 .cache();
 
-        ws.subscribe(new WSObserver());
+        File staticDirectory = new File(InstancesSpawner.class.getResource("/static/").toURI());
+        Observable<String> jsonPorts = startintPort.map(String::valueOf).reduce(new LinkedList<String>(), (List<String> seed, String value) -> {
+            List<String> result = new LinkedList<>(seed);
+            result.add(value);
+            return result;
+        }).flatMap((list) -> Observable.just(new Gson().toJson(list)));
 
+        Observable<WebServer> master = Observable.from(
+                WebServers.createWebServer(masterPort)
+                        .add("/generators/?", new EventSourceOperation(jsonPorts.cache()))
+                        .add(new StaticFileHandler(staticDirectory)).start());
 
-    }
+        Observable.merge(master, pricers).subscribe(new WSObserver());
 
-    static class Operation {
-        private final String operande;
-        private final String op1;
-        private final String op2;
-
-        Operation(final String operande, final String op1, final String op2) {
-            this.operande = operande;
-            this.op1 = op1;
-            this.op2 = op2;
-        }
-    }
-
-    private static class EventSourceOperation implements EventSourceHandler {
-
-        private final Observable<String> observer;
-        private Observable<EventSourceConnection> connections = Observable.empty();
-
-        private EventSourceOperation(Observable<String> observer) {
-            this.observer = observer;
-            this.observer.map(EventSourceMessage::new)
-                    .flatMap((msg) -> Observable.zip(connections,
-                            connections.map((c) -> msg),
-                            Message::new))
-                    .subscribe((msg) -> msg.client.send(msg.message));
-        }
-
-        @Override
-        public void onOpen(EventSourceConnection connection) throws Exception {
-            this.connections = Observable.merge(connections, Observable.just(connection));
-        }
-
-        @Override
-        public void onClose(EventSourceConnection connection) throws Exception {
-            this.connections = connections.filter((c) -> !c.equals(connection));
-        }
-
-        private static class Message {
-            private final EventSourceMessage message;
-            private final EventSourceConnection client;
-
-            private Message(EventSourceConnection client, EventSourceMessage message) {
-                this.message = message;
-                this.client = client;
-            }
-        }
     }
 
     private static class WSObserver implements Observer<WebServer> {
@@ -129,24 +91,8 @@ public class InstancesSpawner {
 
         @Override
         public void onNext(WebServer o) {
-            log.info("WS started : " + o.getUri());
+
         }
     }
 
-    private static class ComputeOperation implements HttpHandler {
-        private final Subject<Operation, Operation> operations;
-
-        public ComputeOperation(final Subject<Operation, Operation> operations) {
-            this.operations = operations;
-        }
-
-        @Override
-        public void handleHttpRequest(final HttpRequest request, final HttpResponse response, final HttpControl control) throws Exception {
-            String operande = request.queryParam("operande");
-            String op1 = request.queryParam("op1");
-            String op2 = request.queryParam("op2");
-            operations.onNext(new Operation(operande, op1, op2));
-            response.content("OK").end();
-        }
-    }
 }
