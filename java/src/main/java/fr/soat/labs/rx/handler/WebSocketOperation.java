@@ -4,7 +4,11 @@ import fr.soat.labs.rx.InstancesSpawner;
 import org.webbitserver.BaseWebSocketHandler;
 import org.webbitserver.WebSocketConnection;
 import rx.Observable;
+import rx.Subscription;
 import rx.functions.Action1;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
 * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,34 +25,30 @@ import rx.functions.Action1;
 */
 public class WebSocketOperation extends BaseWebSocketHandler {
 
-    private Observable<WebSocketConnection> connections = Observable.empty();
+
+    private final Observable<String> observer;
+
+    private final Map<WebSocketConnection, Subscription> subscriptions = new HashMap<>();
 
     public WebSocketOperation(Observable<String> observer) {
-        observer.flatMap((msg) -> Observable.zip(connections,
-                connections.map((c) -> msg),
-                Message::new))
-                .subscribe((Action1<Message>) message -> {
-                    message.client.send(message.message);
-                });
+        this.observer = observer;
+
     }
 
     @Override
     public void onOpen(WebSocketConnection connection) throws Exception {
-        this.connections = Observable.merge(connections, Observable.just(connection));
+        Subscription subscription = this.observer.subscribe(connection::send);
+        subscriptions.put(connection, subscription);
+
+
     }
 
     @Override
     public void onClose(WebSocketConnection connection) throws Exception {
-        this.connections = connections.filter((c) -> !c.equals(connection));
-    }
-
-    private static class Message {
-        private final String message;
-        private final WebSocketConnection client;
-
-        private Message(WebSocketConnection client, String message) {
-            this.message = message;
-            this.client = client;
+        Subscription subscription = subscriptions.get(connection);
+        if(subscription != null) {
+            subscription.unsubscribe();
         }
     }
+
 }

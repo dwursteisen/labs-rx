@@ -1,12 +1,5 @@
 package fr.soat.labs.rx;
 
-import java.io.File;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
-
 import com.github.ryenus.rop.OptionParser;
 import com.google.gson.Gson;
 import fr.soat.labs.rx.handler.EventSourceOperation;
@@ -16,6 +9,13 @@ import org.webbitserver.WebServers;
 import org.webbitserver.handler.StaticFileHandler;
 import rx.Observable;
 import rx.Observer;
+
+import java.io.File;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 /**
  * Created with IntelliJ IDEA.
@@ -48,8 +48,9 @@ public class InstancesSpawner {
         Observable<WebServer> pricers = startintPort
                 .flatMap((port) -> {
 
-                    Observable<String> randomizer = Observable.interval(1, TimeUnit.NANOSECONDS).filter((i) -> new Random().nextInt(10) < 9)
-                            .map((i) -> new Random().nextInt(1000)).map(String::valueOf).map((str) -> String.format("{\"price\": \"%s\"}", str));
+                    final Gson gson = new Gson();
+                    Observable<String> randomizer = Observable.interval(new Random().nextInt(50) + 50, TimeUnit.MILLISECONDS)
+                            .map((i) -> new Random().nextInt(1000)).map((price) -> new Price(price, port)).map(gson::toJson);
 
                     return Observable.from(WebServers.createWebServer(port)
                             .add("/update/?", new WebSocketOperation(randomizer))
@@ -58,11 +59,13 @@ public class InstancesSpawner {
                 .cache();
 
         File staticDirectory = new File(InstancesSpawner.class.getResource("/static/").toURI());
+
+        final Gson gson = new Gson();
         Observable<String> jsonPorts = startintPort.map(String::valueOf).reduce(new LinkedList<String>(), (List<String> seed, String value) -> {
             List<String> result = new LinkedList<>(seed);
             result.add(value);
             return result;
-        }).flatMap((list) -> Observable.just(new Gson().toJson(list)));
+        }).flatMap((list) -> Observable.just(gson.toJson(list)));
 
         Observable<WebServer> master = Observable.from(
                 WebServers.createWebServer(masterPort)
@@ -70,6 +73,7 @@ public class InstancesSpawner {
                         .add(new StaticFileHandler(staticDirectory)).start());
 
         Observable.merge(master, pricers).subscribe(new WSObserver());
+        master.subscribe((ws) -> Logger.getLogger("Main").info("Aggregator started @ "+ws.getUri()));
 
     }
 

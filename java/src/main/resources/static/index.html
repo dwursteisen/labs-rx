@@ -65,22 +65,18 @@
                 <table class="table table-striped">
                     <thead>
                     <tr>
-                        <th>#</th>
+                        <th>Port</th>
+                        <th>Valeur</th>
                         <th>Status</th>
-                        <th>Message</th>
-                        <th>Heure</th>
-                        <th>TBD</th>
                     </tr>
                     </thead>
-                    <tbody id="timeline">
-                    <script type="doT/template" id="message">
+                    <tbody id="line">
+                    <script type="doT/template" id="port_line">
 
-                        <tr id="row_{{=it.id}}" class="{{? it.type.toLowerCase() === 'incident'}}danger{{?}}">
-                            <td>{{=it.id}}</td>
-                            <td>{{=it.type}}</td>
-                            <td>{{=it.message}}</td>
-                            <td>{{=it.hour}}</td>
-                            <td>_</td>
+                        <tr id="row_{{=it.port}}">
+                            <td>{{=it.port}}</td>
+                            <td>{{=it.price}}</td>
+                            <td>{{=it.status}}</td>
                         </tr>
 
                     </script>
