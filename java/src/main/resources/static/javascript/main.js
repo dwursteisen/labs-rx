@@ -30,7 +30,9 @@ $(document).ready(function () {
             socket.onclose = function () {
                 observer.onCompleted();
             }
-        }).map(function(message) { return JSON.parse(message.data);});
+        }).map(function (message) {
+                return JSON.parse(message.data);
+            });
     };
 
     var portsUpdate = source.retry().map(function (event) {
@@ -41,14 +43,14 @@ $(document).ready(function () {
 
 
     var pricesObservables = portsUpdate.map(function (portList) {
-       // return Rx.Observable.fromArray(portList).map(function (port) {
-       //     console.log("port ===" + port);
-       //     return buildWSObserver(port)
-       // });
+        // return Rx.Observable.fromArray(portList).map(function (port) {
+        //     console.log("port ===" + port);
+        //     return buildWSObserver(port)
+        // });
 
         // uggly !! fixme ;)
         var result = [];
-        $(portList).each(function(index, elt) {
+        $(portList).each(function (index, elt) {
             result.push(buildWSObserver(elt));
         })
         return result;
@@ -56,10 +58,20 @@ $(document).ready(function () {
 
     var tableTemplate = doT.compile($("#port_line").html());
     pricesObservables.subscribe(function (listOfObservables) {
-        console.log("obs -> "+listOfObservables);
+        console.log("obs -> " + listOfObservables);
 
         Rx.Observable.fromArray(listOfObservables).subscribe(function (obs) {
-            obs.retry().subscribe(function (priceUpdate) {
+            var priceUpdate = obs.retry();
+            priceUpdate.first().subscribe(function (price) {
+
+                priceUpdate.sample(5000).map(function (price) {
+                    return price.price;
+                }).subscribe(function (ave) {
+                        $("#average_" + price.port).html(ave);
+                    });
+            });
+
+            priceUpdate.subscribe(function (priceUpdate) {
                 var html = tableTemplate(priceUpdate);
                 $("#row_" + priceUpdate.port).replaceWith(html);
             });
@@ -70,8 +82,8 @@ $(document).ready(function () {
 
     portsUpdate.flatMap(function (listPort) {
         return Rx.Observable.fromArray(listPort);
-    }).filter(function(port) {
-            return $("#row_"+port).length == 0;
+    }).filter(function (port) {
+            return $("#row_" + port).length == 0;
         }).map(function (port) {
             return tableTemplate({price: 0, port: port, status: ""})
         }).subscribe(function (html) {
