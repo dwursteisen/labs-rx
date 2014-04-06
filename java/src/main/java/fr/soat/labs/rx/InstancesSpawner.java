@@ -1,21 +1,18 @@
 package fr.soat.labs.rx;
 
 import com.github.ryenus.rop.OptionParser;
-import com.google.gson.Gson;
-import fr.soat.labs.rx.handler.EventSourceOperation;
-import fr.soat.labs.rx.handler.WebSocketOperation;
-import org.webbitserver.WebServer;
-import org.webbitserver.WebServers;
-import org.webbitserver.handler.StaticFileHandler;
+import fr.soat.labs.rx.handler.WebSocketClientOperation;
+import org.webbitserver.netty.WebSocketClient;
 import rx.Observable;
-import rx.Observer;
+import rx.subjects.PublishSubject;
+import rx.subjects.Subject;
+import sun.plugin2.util.SystemUtil;
 
 import java.io.File;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLClassLoader;
 
 /**
  * Created with IntelliJ IDEA.
@@ -31,8 +28,11 @@ public class InstancesSpawner {
     private int numberOfInstances = 5;
     @OptionParser.Option(opt = {"-p", "--minPort"}, description = "First port to use")
     private int minPort = 4567;
-    @OptionParser.Option(opt = {"-m", "--masterPort"}, description = "Master port")
-    private int masterPort = 4444;
+    @OptionParser.Option(opt = {"-m", "--master"}, description = "Master url")
+    private String master = "ws://localhost:4444/killed";
+
+    @OptionParser.Option(opt = {"--port"}, description = "Instance spawner port")
+    private int port = 4040;
 
     public static void main(String[] args) {
         OptionParser parser = new OptionParser(InstancesSpawner.class);
@@ -41,62 +41,42 @@ public class InstancesSpawner {
 
     public void run(OptionParser parser, String[] params) throws Exception { // either or both args can be omitted
 
+        String java = SystemUtil.getJavaHome() + "/bin/java";
 
-        Observable<Integer> startintPort = Observable.range(minPort, numberOfInstances);
+        URL[] classpath = ((URLClassLoader) Thread.currentThread().getContextClassLoader()).getURLs();
+        String classpathCmd = Observable.from(classpath)
+                .reduce("", (str, url) -> str + File.pathSeparatorChar + url)
+                .toBlockingObservable()
+                .first();
+
+        Subject<String, String> newPortToSpawn = PublishSubject.create();
+
+        Observable<Integer> startingPort = Observable.merge(
+                Observable.range(minPort, numberOfInstances),
+                newPortToSpawn.map(Integer::parseInt)
+        );
+
+        Observable<Process> process = startingPort.map((p) -> {
+            try {
+                return new ProcessBuilder(java,
+                        "-classpath", classpathCmd,
+                        "-p", p.toString(),
+                        Node.class.getName()).start();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
 
 
-        Observable<WebServer> pricers = startintPort
-                .flatMap((port) -> {
+        Observable<Integer> startedNode = Observable.zip(startingPort, process, (port, p) -> port);
 
-                    final Gson gson = new Gson();
-                    Observable<String> randomizer = Observable.interval(new Random().nextInt(50) + 50, TimeUnit.MILLISECONDS)
-                            .map((i) -> new Random().nextInt(1000)).map((price) -> new Price(price, port)).map(gson::toJson);
+        startedNode.subscribe((port) -> System.out.println("Starting new process on port " + port),
+                Throwable::printStackTrace);
 
-                    return Observable.from(WebServers.createWebServer(port)
-                            .add("/update/?", new WebSocketOperation(randomizer))
-                            .start());
-                })
-                .cache();
-
-        File staticDirectory = new File(InstancesSpawner.class.getResource("/static/").toURI());
-
-        final Gson gson = new Gson();
-        Observable<String> jsonPorts = startintPort.map(String::valueOf).reduce(new LinkedList<String>(), (List<String> seed, String value) -> {
-            List<String> result = new LinkedList<>(seed);
-            result.add(value);
-            return result;
-        }).flatMap((list) -> Observable.just(gson.toJson(list)));
-
-        Observable<WebServer> master = Observable.from(
-                WebServers.createWebServer(masterPort)
-                        .add("/generators/?", new EventSourceOperation(jsonPorts.cache()))
-                        .add(new StaticFileHandler(staticDirectory)).start());
-
-        Observable.merge(master, pricers).subscribe(new WSObserver());
-        master.subscribe((ws) -> Logger.getLogger("Main").info("Aggregator started @ "+ws.getUri()));
+        WebSocketClient client = new WebSocketClient(new URI(master), new WebSocketClientOperation(newPortToSpawn));
+        Observable.from(client.start()).subscribe((c) -> System.out.println("starting listening on " + c.getUri()));
 
     }
 
-    private static class WSObserver implements Observer<WebServer> {
-
-        private Logger log = Logger.getLogger("WSObserver");
-
-        @Override
-        public void onCompleted() {
-            log.info("All webservers were spawned !");
-
-        }
-
-        @Override
-        public void onError(Throwable e) {
-            log.warning("Got an issue when trying to spawn a webserver");
-            e.printStackTrace();
-        }
-
-        @Override
-        public void onNext(WebServer o) {
-
-        }
-    }
 
 }
