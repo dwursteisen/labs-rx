@@ -1,5 +1,14 @@
 package fr.soat.labs.rx;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Collection;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import com.github.ryenus.rop.OptionParser;
 import fr.soat.labs.rx.handler.WebSocketClientOperation;
 import fr.soat.labs.rx.handler.WebSocketOperation;
@@ -8,13 +17,11 @@ import org.webbitserver.WebServers;
 import org.webbitserver.WebSocketConnection;
 import org.webbitserver.netty.WebSocketClient;
 import rx.Observable;
+import rx.Subscriber;
+import rx.Subscription;
+import rx.schedulers.Schedulers;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
-
-import java.net.URI;
-import java.util.Collection;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
 
 @OptionParser.Command(name = "master", descriptions = "Publish all nodes URL")
 public class Master {
@@ -40,26 +47,15 @@ public class Master {
 
         Observable.interval(1, TimeUnit.SECONDS)
                 .flatMap((i) -> Observable.from(nodes))
-                .map((uri) -> uri.replace("http://", "ws://") + "ping/")
                 .flatMap((uri) -> {
-                    System.out.println("will ping " + uri);
-                    try {
-                        new WebSocketClient(new URI(uri), new BaseWebSocketHandler() {
-                            @Override
-                            public void onOpen(WebSocketConnection connection) throws Exception {
-                                connection.send(uri);
-                            }
+                    String ping = uri.replace("http://", "ws://") + "ping/";
+                    System.out.println("Ping " + ping);
+                    return Observable.create(new WebSocketPingPongOperation(ping))
+                            .flatMap((result) -> Observable.<String>empty())
+                            .onErrorResumeNext(Observable.just(uri));
+                }
+                ).subscribe(killedPorts::onNext);
 
-                            @Override
-                            public void onClose(WebSocketConnection connection) throws Exception {
-                                throw new RuntimeException();
-                            }
-                        }).start().get(5, TimeUnit.SECONDS);
-                        return Observable.<String>empty();
-                    } catch (Exception ex) {
-                        return Observable.just(uri);
-                    }
-                }).subscribe(killedPorts::onNext);
 
         killedPorts.subscribe((uri) -> {
             System.out.println(String.format("%s killed in action", uri));
@@ -68,10 +64,67 @@ public class Master {
         });
 
         Observable.from(WebServers.createWebServer(port)
-                .add("/register/?", new WebSocketClientOperation(newPorts))
+                .add("/register/?", new WebSocketClientOperation(newPorts) {
+                    @Override
+                    public void onClose(final WebSocketConnection connection) throws Exception {
+                        // do nothing
+                    }
+                })
                 .add("/registered/?", new WebSocketOperation(newPorts))
                 .add("/killed", new WebSocketOperation(killedPorts))
                 .start())
                 .subscribe((ws) -> System.out.println("Master started on " + ws.getUri()));
+    }
+
+    private static class WebSocketPingPongOperation implements Observable.OnSubscribe<String> {
+        private final String uri;
+
+        public WebSocketPingPongOperation(final String uri) {
+            this.uri = uri;
+        }
+
+        @Override
+        public void call(final Subscriber<? super String> subscriber) {
+            try {
+                final WebSocketClient client = new WebSocketClient(new URI(uri), new BaseWebSocketHandler() {
+
+                    private final AtomicBoolean hasRepond = new AtomicBoolean(false);
+
+                    @Override
+                    public void onOpen(final WebSocketConnection connection) throws Exception {
+                        connection.send(uri);
+                        Schedulers.io().schedule((schedule) -> {
+                            if (!hasRepond.get()) {
+                                subscriber.onError(new TimeoutException());
+                            }
+                        }, 5, TimeUnit.SECONDS);
+                    }
+
+                    @Override
+                    public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
+                        hasRepond.set(true);
+                        subscriber.onNext(msg);
+                        connection.close();
+                    }
+
+                });
+
+                Future<WebSocketClient> clientFuture = client.start();
+
+                subscriber.add(new Subscription() {
+                    @Override
+                    public void unsubscribe() {
+                        clientFuture.cancel(false);
+                    }
+
+                    @Override
+                    public boolean isUnsubscribed() {
+                        return clientFuture.isCancelled() || clientFuture.isDone();
+                    }
+                });
+            } catch (URISyntaxException ex) {
+                subscriber.onError(ex);
+            }
+        }
     }
 }

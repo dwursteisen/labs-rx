@@ -1,5 +1,11 @@
 package fr.soat.labs.rx;
 
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
+
 import com.github.ryenus.rop.OptionParser;
 import com.google.gson.Gson;
 import fr.soat.labs.rx.handler.WebSocketOperation;
@@ -10,12 +16,6 @@ import org.webbitserver.WebServers;
 import org.webbitserver.WebSocketConnection;
 import org.webbitserver.netty.WebSocketClient;
 import rx.Observable;
-
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 @OptionParser.Command(name = "node", descriptions = "Start a node which publish prices")
 public class Node {
@@ -46,11 +46,12 @@ public class Node {
         Observable<WebServer> ws = Observable.from(WebServers.createWebServer(port)
                 .add("/price/?", new WebSocketOperation(prices))
                 .add("/ping/?", new BaseWebSocketHandler() {
+
                     @Override
-                    public void onMessage(WebSocketConnection connection, String msg) throws Throwable {
-                        System.out.println("ping " + msg + " -> pong !");
+                    public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
                         connection.send(msg);
                     }
+
                 }).start()).first().cache();
 
         ws.map((w) -> w.getUri().toString()).map((uri) -> {
@@ -59,6 +60,7 @@ public class Node {
                     @Override
                     public void onOpen(WebSocketConnection connection) throws Exception {
                         connection.send(uri);
+                        connection.close();
                     }
                 });
             } catch (URISyntaxException e) {
