@@ -1,5 +1,12 @@
 package fr.soat.labs.rx;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLClassLoader;
+
 import com.github.ryenus.rop.OptionParser;
 import fr.soat.labs.rx.handler.WebSocketClientOperation;
 import org.webbitserver.netty.WebSocketClient;
@@ -7,12 +14,6 @@ import rx.Observable;
 import rx.subjects.PublishSubject;
 import rx.subjects.Subject;
 import sun.plugin2.util.SystemUtil;
-
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URL;
-import java.net.URLClassLoader;
 
 /**
  * Created with IntelliJ IDEA.
@@ -30,7 +31,6 @@ public class InstancesSpawner {
     private int minPort = 4567;
     @OptionParser.Option(opt = {"-m", "--master"}, description = "Master url")
     private String master = "ws://localhost:4444/killed";
-
     @OptionParser.Option(opt = {"--port"}, description = "Instance spawner port")
     private int port = 4040;
 
@@ -45,7 +45,13 @@ public class InstancesSpawner {
 
         URL[] classpath = ((URLClassLoader) Thread.currentThread().getContextClassLoader()).getURLs();
         String classpathCmd = Observable.from(classpath)
-                .reduce("", (str, url) -> str + File.pathSeparatorChar + url)
+                .reduce("", (str, url) -> {
+                    try {
+                        return new File(url.toURI()).getAbsolutePath() + File.pathSeparatorChar + str;
+                    } catch (URISyntaxException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
                 .toBlockingObservable()
                 .first();
 
@@ -58,20 +64,25 @@ public class InstancesSpawner {
 
         Observable<Process> process = startingPort.map((p) -> {
             try {
-                return new ProcessBuilder(java,
-                        "-classpath", classpathCmd,
-                        "-p", p.toString(),
-                        Node.class.getName()).start();
+                System.out.println("STARTING " + p);
+                ProcessBuilder builder = new ProcessBuilder(java,
+                        "-classpath", "\"" + classpathCmd + "\"",
+                        Node.class.getName(),
+                        "-p", p.toString());
+                // System.out.println(Observable.from(builder.command()).reduce("", (seed, value) -> seed + " "+value).toBlockingObservable().first());
+                builder.redirectErrorStream(true);
+                return builder.start();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         });
 
+        process.subscribe();
 
-        Observable<Integer> startedNode = Observable.zip(startingPort, process, (port, p) -> port);
-
-        startedNode.subscribe((port) -> System.out.println("Starting new process on port " + port),
-                Throwable::printStackTrace);
+//        Observable<Integer> startedNode = Observable.zip(startingPort, process, (port, p) -> port);
+//
+//        startedNode.subscribe((port) -> System.out.println("Starting new process on port " + port),
+//                Throwable::printStackTrace);
 
         WebSocketClient client = new WebSocketClient(new URI(master), new WebSocketClientOperation(newPortToSpawn));
         Observable.from(client.start()).subscribe((c) -> System.out.println("starting listening on " + c.getUri()));

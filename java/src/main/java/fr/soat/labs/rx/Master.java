@@ -48,11 +48,13 @@ public class Master {
         Observable.interval(1, TimeUnit.SECONDS)
                 .flatMap((i) -> Observable.from(nodes))
                 .flatMap((uri) -> {
-                    String ping = uri.replace("http://", "ws://") + "ping/";
-                    System.out.println("Ping " + ping);
-                    return Observable.create(new WebSocketPingPongOperation(ping))
-                            .flatMap((result) -> Observable.<String>empty())
-                            .onErrorResumeNext(Observable.just(uri));
+//                    String ping = uri.replace("http://", "ws://") + "ping/";
+//                    return Observable.create(new WebSocketPingPongOperation(ping))
+//                            .flatMap((result) -> Observable.<String>empty())
+//                            .subscribeOn(Schedulers.io())
+//                            .observeOn(Schedulers.io())
+//                            .onErrorResumeNext(Observable.just(uri));
+                    return Observable.<String>empty();
                 }
                 ).subscribe(killedPorts::onNext);
 
@@ -89,22 +91,29 @@ public class Master {
                 final WebSocketClient client = new WebSocketClient(new URI(uri), new BaseWebSocketHandler() {
 
                     private final AtomicBoolean hasRepond = new AtomicBoolean(false);
+                    private Subscription timeout;
 
                     @Override
                     public void onOpen(final WebSocketConnection connection) throws Exception {
                         connection.send(uri);
-                        Schedulers.io().schedule((schedule) -> {
+                        timeout = Schedulers.computation().schedule((schedule) -> {
                             if (!hasRepond.get()) {
                                 subscriber.onError(new TimeoutException());
                             }
+                            schedule.unsubscribe();
                         }, 5, TimeUnit.SECONDS);
+
                     }
 
                     @Override
                     public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
                         hasRepond.set(true);
-                        subscriber.onNext(msg);
+                        timeout.unsubscribe();
                         connection.close();
+
+                        subscriber.onNext(msg);
+                        subscriber.onCompleted();
+                        subscriber.unsubscribe();
                     }
 
                 });
