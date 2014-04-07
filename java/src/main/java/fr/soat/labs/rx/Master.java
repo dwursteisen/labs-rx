@@ -4,10 +4,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.github.ryenus.rop.OptionParser;
 import fr.soat.labs.rx.handler.WebSocketClientOperation;
@@ -17,7 +15,6 @@ import org.webbitserver.WebServers;
 import org.webbitserver.WebSocketConnection;
 import org.webbitserver.netty.WebSocketClient;
 import rx.Observable;
-import rx.Subscriber;
 import rx.Subscription;
 import rx.schedulers.Schedulers;
 import rx.subjects.PublishSubject;
@@ -28,6 +25,7 @@ public class Master {
 
     private final Collection<String> nodes = new ConcurrentLinkedQueue<>();
     private final Collection<String> killed = new ConcurrentLinkedQueue<>();
+    private final Collection<WebSocketClient> clients = new ConcurrentLinkedQueue<>();
     @OptionParser.Option(opt = {"--port"}, description = "Instance spawner port")
     private int port = 4444;
 
@@ -45,25 +43,51 @@ public class Master {
         newPorts.subscribe(nodes::add);
         newPorts.subscribe((uri) -> System.out.println(String.format("Node at %s added to master", uri)));
 
-        Observable.interval(1, TimeUnit.SECONDS)
-                .flatMap((i) -> Observable.from(nodes))
-                .flatMap((uri) -> {
-//                    String ping = uri.replace("http://", "ws://") + "ping/";
-//                    return Observable.create(new WebSocketPingPongOperation(ping))
-//                            .flatMap((result) -> Observable.<String>empty())
-//                            .subscribeOn(Schedulers.io())
-//                            .observeOn(Schedulers.io())
-//                            .onErrorResumeNext(Observable.just(uri));
-                    return Observable.<String>empty();
-                }
-                ).subscribe(killedPorts::onNext);
+
+        Observable<Long> ping = Observable.interval(1, TimeUnit.SECONDS);
+        newPorts.map((uri) -> {
+            try {
+                String pingUrl = toWsUrl(uri);
+                WebSocketClient client = new WebSocketClient(new URI(pingUrl), new BaseWebSocketHandler() {
+
+                    private Subscription subscription;
+                    private Subscription pingSubscription;
 
 
-        killedPorts.subscribe((uri) -> {
-            System.out.println(String.format("%s killed in action", uri));
-            killed.add(uri);
-            nodes.remove(uri);
-        });
+                    @Override
+                    public void onOpen(final WebSocketConnection connection) throws Exception {
+                        pingSubscription = ping.subscribe((p) -> {
+                            subscription = Schedulers.computation().schedule((inner) -> {
+                                killedPorts.onNext(uri);
+                                stopMe();
+                            }, 5, TimeUnit.SECONDS);
+                            connection.send(uri);
+                        });
+
+                    }
+
+                    private void stopMe() {
+                        if (pingSubscription != null) {
+                            pingSubscription.unsubscribe();
+                        }
+                    }
+
+                    @Override
+                    public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
+                        if (subscription != null) {
+                            subscription.unsubscribe();
+                        }
+                    }
+                });
+                return client.start().get();
+            } catch (URISyntaxException | InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }).subscribe(clients::add);
+
+
+        Observable<String> filteredKilledPorts = killedPorts.filter((uri) -> !killed.contains(uri));
+
 
         Observable.from(WebServers.createWebServer(port)
                 .add("/register/?", new WebSocketClientOperation(newPorts) {
@@ -73,67 +97,24 @@ public class Master {
                     }
                 })
                 .add("/registered/?", new WebSocketOperation(newPorts))
-                .add("/killed", new WebSocketOperation(killedPorts))
+                .add("/killed", new WebSocketOperation(filteredKilledPorts.map((uri) -> {
+                    int portIndex = uri.lastIndexOf(":");
+                    int endPortIndex = uri.indexOf("/", portIndex);
+                    return uri.substring(portIndex + 1, endPortIndex).trim();
+                })))
                 .start())
                 .subscribe((ws) -> System.out.println("Master started on " + ws.getUri()));
+
+        filteredKilledPorts.subscribe((uri) -> {
+            System.out.println(String.format("%s killed in action", uri));
+            killed.add(uri);
+            nodes.remove(uri);
+            Observable.from(clients).filter((c) -> c.getUri().toString().equals(toWsUrl(uri))).subscribe(clients::remove);
+        });
     }
 
-    private static class WebSocketPingPongOperation implements Observable.OnSubscribe<String> {
-        private final String uri;
-
-        public WebSocketPingPongOperation(final String uri) {
-            this.uri = uri;
-        }
-
-        @Override
-        public void call(final Subscriber<? super String> subscriber) {
-            try {
-                final WebSocketClient client = new WebSocketClient(new URI(uri), new BaseWebSocketHandler() {
-
-                    private final AtomicBoolean hasRepond = new AtomicBoolean(false);
-                    private Subscription timeout;
-
-                    @Override
-                    public void onOpen(final WebSocketConnection connection) throws Exception {
-                        connection.send(uri);
-                        timeout = Schedulers.computation().schedule((schedule) -> {
-                            if (!hasRepond.get()) {
-                                subscriber.onError(new TimeoutException());
-                            }
-                            schedule.unsubscribe();
-                        }, 5, TimeUnit.SECONDS);
-
-                    }
-
-                    @Override
-                    public void onMessage(final WebSocketConnection connection, final String msg) throws Throwable {
-                        hasRepond.set(true);
-                        timeout.unsubscribe();
-                        connection.close();
-
-                        subscriber.onNext(msg);
-                        subscriber.onCompleted();
-                        subscriber.unsubscribe();
-                    }
-
-                });
-
-                Future<WebSocketClient> clientFuture = client.start();
-
-                subscriber.add(new Subscription() {
-                    @Override
-                    public void unsubscribe() {
-                        clientFuture.cancel(false);
-                    }
-
-                    @Override
-                    public boolean isUnsubscribed() {
-                        return clientFuture.isCancelled() || clientFuture.isDone();
-                    }
-                });
-            } catch (URISyntaxException ex) {
-                subscriber.onError(ex);
-            }
-        }
+    private String toWsUrl(final String uri) {
+        return uri.replace("http://", "ws://") + "ping/";
     }
+
 }
